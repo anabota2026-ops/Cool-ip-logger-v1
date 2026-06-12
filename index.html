@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>IP Logger v1</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    font-family: 'Courier New', monospace;
+    background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+    color: #00ff00;
+    min-height: 100vh;
+    padding: max(12px, env(safe-area-inset-top)) env(safe-area-inset-right, 12px) max(12px, env(safe-area-inset-bottom)) env(safe-area-inset-left, 12px);
+    display: flex;
+    flex-direction: column;
+}
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(10, 10, 20, 0.95);
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+h1 { font-size: 2em; text-shadow: 0 0 10px #00ff00; text-align: center; margin-bottom: 8px; }
+.status { text-align: center; color: #00aa00; margin-bottom: 20px; font-size: 0.9em; }
+.pulse { display: inline-block; width: 8px; height: 8px; background: #00ff00; border-radius: 50%; margin-right: 8px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.stat {
+    background: rgba(0, 255, 0, 0.05);
+    border: 1.5px solid #00ff00;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+.stat-label { font-size: 0.75em; color: #00aa00; text-transform: uppercase; margin-bottom: 8px; font-weight: 700; }
+.stat-value { font-size: 1.8em; font-weight: bold; color: #00ff00; }
+.title { color: #00ff00; font-size: 0.9em; text-transform: uppercase; margin: 15px 0 10px 0; letter-spacing: 1px; font-weight: 700; }
+.logs {
+    background: rgba(0, 20, 0, 0.8);
+    border: 1.5px solid #00ff00;
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 15px;
+    flex: 1;
+}
+.log-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: rgba(0, 255, 0, 0.05);
+    border-left: 2.5px solid #00ff00;
+    border-radius: 4px;
+    font-size: 0.8em;
+    word-break: break-all;
+    animation: slideIn 0.3s ease;
+}
+@keyframes slideIn { from { transform: translateX(-10px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.log-ip { color: #ffff00; font-weight: bold; display: block; margin-bottom: 3px; }
+.log-time { color: #00aa00; font-size: 0.85em; }
+.empty { text-align: center; color: #00aa00; padding: 30px 10px; }
+.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+button {
+    padding: 12px;
+    background: #00ff00;
+    color: #0f0f1e;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.9em;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    -webkit-user-select: none;
+    user-select: none;
+}
+button:active { background: #00dd00; transform: scale(0.97); }
+.full { grid-column: 1 / -1; }
+.danger { background: #ff3333; }
+.danger:active { background: #cc0000; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>⚠️ IP LOGGER v1</h1>
+    <div class="status"><span class="pulse"></span> TRACKING LIVE</div>
+    
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-label">IPs Captured</div>
+            <div class="stat-value" id="unique">0</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Total Hits</div>
+            <div class="stat-value" id="total">0</div>
+        </div>
+    </div>
+
+    <div class="title">📍 Real IP Logs</div>
+    <div class="logs" id="logs">
+        <div class="empty">Loading...</div>
+    </div>
+
+    <div class="buttons">
+        <button onclick="load()">🔄 Refresh</button>
+        <button onclick="exportData()">💾 Export</button>
+    </div>
+    <button class="full danger" onclick="clearLogs()">🗑️ Clear All</button>
+</div>
+
+<script>
+async function load() {
+    try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        
+        document.getElementById('unique').textContent = data.uniqueIPs;
+        document.getElementById('total').textContent = data.totalRequests;
+        
+        const logsEl = document.getElementById('logs');
+        
+        if (data.recentIPs.length === 0) {
+            logsEl.innerHTML = '<div class="empty">No IPs captured yet.</div>';
+            return;
+        }
+        
+        logsEl.innerHTML = data.recentIPs.map(log => `
+            <div class="log-item">
+                <span class="log-ip">${log.ip}</span>
+                <span class="log-time">[${log.time}] ${log.date}</span>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error(e);
+        document.getElementById('logs').innerHTML = '<div class="empty">Error loading logs</div>';
+    }
+}
+
+async function exportData() {
+    const res = await fetch('/api/logs');
+    const data = await res.json();
+    const str = JSON.stringify(data, null, 2);
+    const blob = new Blob([str], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ip_logs_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function clearLogs() {
+    if (confirm('Clear all logs?')) {
+        await fetch('/api/logs', { method: 'DELETE' });
+        load();
+    }
+}
+
+setInterval(load, 2000);
+load();
+</script>
+</body>
+</html>
